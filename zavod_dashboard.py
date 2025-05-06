@@ -7,7 +7,7 @@ import seaborn as sns
 import numpy as np
 from matplotlib.colors import to_hex as rgb2hex
 from sqlalchemy import create_engine
-import psycopg2
+# import psycopg2
 import sqlite3
 
 
