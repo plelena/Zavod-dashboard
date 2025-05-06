@@ -5,5 +5,5 @@ matplotlib
 seaborn
 numpy
 sqlalchemy
-psycopg2
-sqlite3
+
+
