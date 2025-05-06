@@ -22,8 +22,16 @@ def load_data():
     # query = "SELECT * FROM defects" 
     # df = pd.read_sql(query, engine)
 
+    DB_URL = "https://drive.google.com/file/d/18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr/view?usp=drive_link"
+    DB_FILE = "defects.sqlite"
+
+    # Скачиваем БД
+    if not os.path.exists(DB_FILE):
+        with st.spinner("Скачиваем базу данных..."):
+            urllib.request.urlretrieve(DB_URL, DB_FILE)
+
     # Подключение SQLite
-    conn = sqlite3.connect("defects.sqlite")
+    conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql("SELECT * FROM defects", conn)
     conn.close()
       
