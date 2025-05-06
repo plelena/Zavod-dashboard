@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 import sqlite3
 import os
 import urllib.request
+import gdown
 
 
 # ---- ЗАГРУЗКА ДАННЫХ ----
@@ -24,8 +25,11 @@ def load_data():
     # query = "SELECT * FROM defects" 
     # df = pd.read_sql(query, engine)
 
-    DB_URL = "https://drive.google.com/uc?export=download&id=18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr"
-    DB_FILE = "defects.sqlite"
+    DB_ID = "18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr"
+    DB_URL = f"https://drive.google.com/uc?id={DB_ID}"
+    DB_FILE = "data.sqlite"
+
+    gdown.download(DB_URL, DB_FILE, quiet=False)
 
     # Скачиваем БД
     if not os.path.exists(DB_FILE):
