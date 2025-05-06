@@ -24,7 +24,7 @@ def load_data():
     # query = "SELECT * FROM defects" 
     # df = pd.read_sql(query, engine)
 
-    DB_URL = "https://drive.google.com/file/d/18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr/view?usp=drive_link"
+    DB_URL = "https://drive.google.com/uc?export=download&id=18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr"
     DB_FILE = "defects.sqlite"
 
     # Скачиваем БД
