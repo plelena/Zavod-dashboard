@@ -12,6 +12,7 @@ import sqlite3
 import os
 import urllib.request
 import gdown
+from datetime import datetime
 
 
 # ---- ЗАГРУЗКА ДАННЫХ ----
@@ -25,9 +26,13 @@ def load_data():
     # query = "SELECT * FROM defects" 
     # df = pd.read_sql(query, engine)
 
+    # DB_URL = "https://drive.google.com/uc?export=download&id=18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr"
+    # DB_FILE = "defects.sqlite"
+
     DB_ID = "18rFP7h9Dwv6jh-juwTGVfF_PXuI63rdr"
     DB_URL = f"https://drive.google.com/uc?id={DB_ID}"
-    DB_FILE = "data.sqlite"
+    DB_FILE = "defects.sqlite"
+
 
     gdown.download(DB_URL, DB_FILE, quiet=False)
 
@@ -35,6 +40,8 @@ def load_data():
     if not os.path.exists(DB_FILE):
         with st.spinner("Скачиваем базу данных..."):
             urllib.request.urlretrieve(DB_URL, DB_FILE)
+
+
 
     # Подключение SQLite
     conn = sqlite3.connect(DB_FILE)
@@ -79,26 +86,41 @@ st.markdown("""
 st.sidebar.header("📊 Фiльтри")
 
 # Фильтр по деталям 
-part_options = sorted(df["part_name"].dropna().unique().tolist())
-selected_parts = st.sidebar.multiselect("Виберіть деталь:", ["All"] + part_options, default=["All"])
-if "All" in selected_parts:
-    selected_parts = part_options
+
+part_name_mapping = {
+    'frame': 'Рама',
+    'beam': 'Балка',
+    'draft_yoke': 'Тягове ярмо',
+    'coupler_1008': 'Автозчеп 1008',
+    'coupler_1028': 'Автозчеп 1028',
+    'plate_stopper': 'Пластина-упор',
+    'front_stopper': 'Передній упор',
+    'rear_stopper': 'Задній упор'
+}
+part_options_raw = sorted(df["part_name"].dropna().unique().tolist())
+part_options_ukr = [part_name_mapping.get(part, part) for part in part_options_raw]
+reverse_mapping = {part_name_mapping.get(k, k): k for k in part_options_raw}
+selected_parts_ukr = st.sidebar.multiselect("Виберіть деталь:", ["Усі"] + part_options_ukr, default=["Усі"])
+if "Усі" in selected_parts_ukr:
+    selected_parts = part_options_raw
+else:
+    selected_parts = [reverse_mapping[name] for name in selected_parts_ukr]
 
 # Фильтр по году
 years = sorted(df["year"].dropna().unique().tolist())
-selected_years = st.sidebar.multiselect("Рiк:", ["All"] + years, default=["All"])
-if "All" in selected_years:
+selected_years = st.sidebar.multiselect("Рiк:", ["Усі"] + years, default=["Усі"])
+if "Усі" in selected_years:
     selected_years = years
 
 # Фильтр по месяцу
 months = sorted(df["month"].dropna().unique())
 month_names = {1: "Ciчень", 2: "Лютий", 3: "Березень", 4: "Квiтень", 5: "Травень", 6: "Червень",
                7: "Липень", 8: "Серпень", 9: "Вересень", 10: "Жовтень", 11: "Листопад", 12: "Грудень"}
-month_labels = ["All"] + [month_names[m] for m in months]
-selected_month_labels = st.sidebar.multiselect("Мiсяць:", month_labels, default=["All"])
+month_labels = ["Усі"] + [month_names[m] for m in months]
+selected_month_labels = st.sidebar.multiselect("Мiсяць:", month_labels, default=["Усі"])
 
 # Преобразуем выбранные месяцы обратно в числа
-if "All" in selected_month_labels:
+if "Усі" in selected_month_labels:
     selected_months = months
 else:
     selected_months = [k for k, v in month_names.items() if v in selected_month_labels]
@@ -113,13 +135,12 @@ filtered_df = df[
 
 # ---- ТАБЫ (ВКЛАДКИ) ----
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Динаміка по місяцях",
-    "Топ-10 дефектів",
+    "Обрубники",
     "Брак за тижнями",
     "t°C заливки vs % браку",
-    "Закінчені плавки",
-    "Виннi"
+    "Закінчені плавки"
 ])
 
 # ---- ОСНОВНОЙ КОНТЕНТ ----
@@ -213,45 +234,227 @@ with tab1:
     # Выводим график
     st.plotly_chart(fig1, use_container_width=False)
 
+
+    # --- Нижняя часть: два графика рядом ---
+    col1, col2 = st.columns([2.5, 1])
+
+    with col1:
+        st.markdown("<h3 style='font-size:18px;'>🔝 Топ-10 дефектiв</h3>", unsafe_allow_html=True)
+
+        total_casts = filtered_df["cast_id"].nunique()
+
+        top_defects = (
+            filtered_df[filtered_df["rejected"] == 1]
+            .groupby("defects")
+            .size()
+            .reset_index(name="count")
+            .sort_values("count", ascending=False)
+            .head(10)
+        )
+
+        top_defects["percent"] = 100 * top_defects["count"] / total_casts
+        top_defects = top_defects.sort_values("percent", ascending=True)
+
+        fig2 = px.bar(
+            top_defects,
+            x="percent",
+            y="defects",
+            orientation="h",
+            labels={"percent": "% браку", "defects": ""},
+            text=top_defects["percent"].apply(lambda x: f"{x:.1f}%"),
+            color_discrete_sequence=["#6BA5A4"]
+        )
+
+        # Настройки графика
+        fig2.update_traces(
+            textposition="outside",
+            textfont_size=10  #  размер текста 
+        )
+
+        # Максимальное значение + запас (30–50%) для текста
+        max_percent = top_defects["percent"].max()
+        x_range_max = max_percent * 1.5  # Можешь поиграться с этим коэффициентом
+
+        fig2.update_layout(
+            xaxis=dict(
+                tickformat=".1f",
+                range=[0, x_range_max]
+            ),
+            width=900,
+            height=400,
+            margin=dict(r=10, l=150)  # убираем лишний отступ справа
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    with col2:
+        st.markdown("<h3 style='font-size:18px;'>Виннi</h3>", unsafe_allow_html=True)
+
+        # Подготовка данных
+        filtered_df["vinovn"] = (
+            filtered_df["vinovn"]
+            .fillna("—")
+            .astype(str)
+            .str.strip()
+            .str.replace(r"\s+", " ", regex=True)
+            .str.upper()
+        )
+
+        defective_df = filtered_df[filtered_df["rejected"] == 1].copy()
+        defective_df = defective_df.drop_duplicates(subset=["cast_id"])
+        total_defects = defective_df["cast_id"].nunique()
+
+        vinovn_stats = (
+            filtered_df.groupby(["vinovn"], dropna=False)
+            .agg(defects=("rejected", "sum"))
+            .reset_index()
+        )
+        vinovn_stats["defect_percent"] = 100 * vinovn_stats["defects"] / total_defects
+        vinovn_stats = vinovn_stats.sort_values("defect_percent", ascending=False)
+
+        # Оставим топ 8 виновных, остальных объединим в "Інші"
+        top_n = 8
+        top_vinovn = vinovn_stats.head(top_n).copy()
+        other_sum = vinovn_stats["defects"].iloc[top_n:].sum()
+        other_percent = vinovn_stats["defect_percent"].iloc[top_n:].sum()
+
+        if other_sum > 0:
+            other_row = pd.DataFrame([{
+                "vinovn": "ІНШІ",
+                "defects": other_sum,
+                "defect_percent": other_percent
+            }])
+            top_vinovn = pd.concat([top_vinovn, other_row], ignore_index=True)
+
+        colors = [
+        "#6BA5A4",  # Серо-бирюзовый (основной фирменный)
+        "#F4A261",  # Светло-оранжевый (акцент)
+        "#E76F51",  # Терракотово-красный (ошибки)
+        "#2A9D8F",  # Бирюзовый
+        "#264653",  # Тёмно-синий (нейтральный)
+        "#E9C46A",  # Жёлтый-песочный (внимание)
+        "#A8DADC",  # Голубой холодный
+        "#457B9D",  # Синий стальной
+        "#B5838D"   # Пыльно-розовый (на фоне нейтральных хорошо смотрится)
+        ]
+
+        # Пончиковая диаграмма
+        fig3 = go.Figure()
+        fig3.add_trace(go.Pie(
+            labels=top_vinovn["vinovn"],
+            values=top_vinovn["defects"],
+            hole=0.4,
+            textinfo="label+percent",
+            insidetextorientation="radial",
+            marker=dict(colors=colors[:len(top_vinovn)])
+        ))
+        fig3.update_layout(
+            height=400,
+            margin=dict(t=30),
+            showlegend=True
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
 #------------------------------------------------------------------------------------------
 
 with tab2:
 
-    # 2. Топ-10 дефектов
-    st.markdown("<h3 style='font-size:20px;'>🔝 Топ-10 дефектiв</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='font-size:20px;'>Продуктивність обрубників по місяцях</h3>", unsafe_allow_html=True)
 
-    # Всего отливок 
-    total_casts = filtered_df["cast_id"].nunique() 
+    df_filtered_tab2 = df[df["part_name"].isin(selected_parts)]
 
-    # Считаем дефекты
-    top_defects = (
-        filtered_df[filtered_df["rejected"] == 1]
-        .groupby("defects")
-        .size()
-        .reset_index(name="count")
-        .sort_values("count", ascending=False)
-        .head(10)
+    # === Работаем с датами ===
+    df_filtered_tab2["month_start"] = pd.to_datetime(df_filtered_tab2["month_start"])
+    all_months_sorted = df_filtered_tab2["month_start"].sort_values().unique()
+
+    # === Определяем последние 36 месяцев ===
+    if selected_years:
+        # Если выбран 1 год, берём с января этого года 36 месяцев
+        min_year = min(selected_years)
+        start_date = pd.to_datetime(f"{min_year}-01-01")
+        end_date = start_date + pd.DateOffset(months=36)
+        valid_months = [m for m in all_months_sorted if start_date <= m < end_date]
+    else:
+        # По умолчанию — последние 36 месяцев
+        valid_months = sorted(all_months_sorted)[-36:]
+
+    # Применяем отфильтрованные месяцы
+    df_filtered_tab2 = df_filtered_tab2[df_filtered_tab2["month_start"].isin(valid_months)]
+
+    # Если выбраны месяцы — фильтруем по ним (но внутри 3-летнего диапазона)
+    if selected_months:
+        df_filtered_tab2 = df_filtered_tab2[df_filtered_tab2["month"].isin(selected_months)]
+
+    # === Считаем обработку ===
+    primary = (
+        df_filtered_tab2.groupby(['pispoln11', 'month_start'])['cast_id']
+        .count()
+        .reset_index()
+        .rename(columns={'pispoln11': 'fettler', 'cast_id': 'primary_count'})
     )
 
-    # Добавляем столбец с процентами от общего числа отливок
-    top_defects["percent"] = 100 * top_defects["count"] / total_casts
-    top_defects = top_defects.sort_values("percent", ascending=True)
-
-    # Строим график
-    fig2 = px.bar(
-        top_defects,
-        x="percent",
-        y="defects",
-        orientation="h",
-        labels={"percent": "% браку", "defects": "Тип дефекта"},
-        text=top_defects["percent"].apply(lambda x: f"{x:.1f}%"),
-        color_discrete_sequence=["#6BA5A4"] 
+    final = (
+        df_filtered_tab2.groupby(['sd1ispoln', 'month_start'])['cast_id']
+        .count()
+        .reset_index()
+        .rename(columns={'sd1ispoln': 'fettler', 'cast_id': 'final_count'})
     )
 
-    fig2.update_traces(textposition="outside")
-    fig2.update_layout(xaxis_tickformat=".1f")
+    merged = pd.merge(primary, final, how='outer', on=['fettler', 'month_start']).fillna(0)
+    merged['total_processed'] = merged['primary_count'] + merged['final_count']
 
-    st.plotly_chart(fig2, use_container_width=True)
+    # === Выбор обрубщиков ===
+    total_by_fettler = (
+        merged.groupby("fettler")["total_processed"]
+        .sum()
+        .reset_index()
+        .sort_values("total_processed", ascending=False)
+    )
+
+    top_5 = total_by_fettler.head(5)
+    bottom_5 = total_by_fettler.tail(5)
+    default_fettlers = pd.concat([top_5, bottom_5])["fettler"].dropna().unique().tolist()
+
+    all_fettlers = sorted(merged["fettler"].dropna().unique())
+    selected_fettlers_ui = st.multiselect("Виберіть обрубщиків:", ["Усi"] + all_fettlers, default=["Усi"])
+
+    selected_fettlers = default_fettlers if "Усi" in selected_fettlers_ui else selected_fettlers_ui
+
+    display_df = merged[merged["fettler"].isin(selected_fettlers)]
+
+    # === Pivot и сортировка ===
+    heatmap_data = display_df.pivot_table(
+        index="fettler",
+        columns="month_start",
+        values="total_processed",
+        aggfunc="sum",
+        fill_value=0
+    )
+    heatmap_data = heatmap_data.loc[heatmap_data.sum(axis=1).sort_values(ascending=False).index]
+
+    # === Построение тепловой карты ===
+    plt.figure(figsize=(18, len(heatmap_data) * 0.6))
+    sns.set(font_scale=0.85)
+
+    ax = sns.heatmap(
+        heatmap_data,
+        cmap="RdYlGn",
+        annot=True,
+        fmt=".0f",
+        linewidths=0.5,
+        cbar_kws={'label': 'Кількість заготовок'}
+    )
+
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_title("Кількість заготовок (по місяцях)")
+
+    # Названия месяцев — сверху
+    formatted_x_labels = [d.strftime("%b %Y") for d in heatmap_data.columns]
+    ax.set_xticklabels(formatted_x_labels, rotation=45, ha="right")
+    ax.tick_params(axis='x', labeltop=True, labelbottom=False)
+    ax.set_yticklabels(ax.get_yticklabels(), fontsize=14)
+
+    st.pyplot(plt)
 
 #---------------------------------------------------------------------------------------
 with tab3:
@@ -497,50 +700,3 @@ with tab5:
 
 
 # -------------------------------------------------------------------------------------
-
-with tab6:
-
-    # 4. По виновным
-
-    # Заголовок
-    st.markdown("<h3 style='font-size:20px;'>Брак за винними </h3>", unsafe_allow_html=True)
-
-    filtered_df["vinovn"] = (
-    filtered_df["vinovn"]
-    .fillna("—")  # на случай пропусков
-    .astype(str)  # если вдруг были не строки
-    .str.strip()  # убрать пробелы в начале и конце
-    .str.replace(r"\s+", " ", regex=True)  # нормализовать множественные пробелы
-    .str.upper()  # если нужно всё в верхнем регистре
-    )
-
-    defective_df = filtered_df[filtered_df["rejected"] == 1].copy()
-    defective_df = defective_df.drop_duplicates(subset=["cast_id"])
-    total_defects = defective_df["cast_id"].nunique()
-
-    # Группировка по виновным
-    vinovn_stats = (
-        filtered_df.groupby(["vinovn"], dropna=False)
-        .agg(defects=("rejected", "sum"))
-        .reset_index()
-    )
-    vinovn_stats["defect_percent"] = 100 * vinovn_stats["defects"] / total_defects
-    vinovn_stats = vinovn_stats.sort_values("defect_percent", ascending=False)
-
-    # Генерация градиентных цветов
-    norm = plt.Normalize(vmin=vinovn_stats["defect_percent"].min(), vmax=vinovn_stats["defect_percent"].max())
-    cmap = plt.cm.get_cmap("RdYlGn_r")
-
-
-    def get_color(val):
-        rgba = cmap(norm(val))
-        r, g, b, a = rgba  # раскладываем RGBA
-        a = 0.5  # задаем свою прозрачность (например 0.5 = 50% прозрачности)
-        return f"background-color: rgba({int(r*255)}, {int(g*255)}, {int(b*255)}, {a});"
-
-    # Применяем стили
-    styled_table = vinovn_stats[["vinovn","defect_percent"]].style.applymap(get_color, subset=["defect_percent"]).format({"defect_percent": "{:.1f}%"})
-
-    # Показываем без прокрутки
-    table_height = len(vinovn_stats) * 35 + 35
-    st.dataframe(styled_table, use_container_width=True, height=table_height)
