@@ -357,7 +357,7 @@ with tab1:
 #------------------------------------------------------------------------------------------
 
 with tab2:
-st.write("Test deploy")
+    st.write("Test deploy")
    
 
 #---------------------------------------------------------------------------------------
@@ -425,38 +425,6 @@ with tab3:
 
 # ---------------------------------------------------------------------------------
 with tab4:
-
-    # # 4. По участкам и сменам (было ранее))
-
-    # # Заголовок
-    # st.markdown("<h3 style='font-size:20px;'>Дефекти по ділянках і змінах</h3>", unsafe_allow_html=True)
-
-    # # Группировка по бригадам
-    # brig_stats = (
-    #     filtered_df.groupby(["brig"], dropna=False)
-    #     .agg(total=("cast_id", "count"), defects=("rejected", "sum"))
-    #     .reset_index()
-    # )
-    # brig_stats["defect_percent"] = 100 * brig_stats["defects"] / brig_stats["total"]
-    # brig_stats = brig_stats.sort_values("defect_percent", ascending=False)
-
-    # # Генерация градиентных цветов
-    # norm = plt.Normalize(vmin=brig_stats["defect_percent"].min(), vmax=brig_stats["defect_percent"].max())
-    # cmap = plt.cm.get_cmap("RdYlGn_r")
-
-    # def get_color(val):
-    #     rgba = cmap(norm(val))
-    #     r, g, b, a = rgba  # раскладываем RGBA
-    #     a = 0.5  # задаем свою прозрачность (например 0.5 = 50% прозрачности)
-    #     return f"background-color: rgba({int(r*255)}, {int(g*255)}, {int(b*255)}, {a});"
-
-    # # Применяем стили
-    # styled_table = brig_stats[["brig","defect_percent"]].style.applymap(get_color, subset=["defect_percent"]).format({"defect_percent": "{:.1f}%"})
-
-    # # Показываем без прокрутки
-    # st.dataframe(styled_table, use_container_width=True, height=len(brig_stats)*35 + 35)
-
-    # 4. Изменения температуры заливки и брак
 
     st.markdown("<h3 style='font-size:20px;'>Температура заливки vs % браку (помiсячно)</h3>", unsafe_allow_html=True)
 
